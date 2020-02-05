@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "dependencies": {
+    "chalk": "^3.0.0",
+    "mime-types": "^2.1.26",
+    "node-fetch": "^2.6.0",
+    "progress": "^2.0.3"
+  }
+}

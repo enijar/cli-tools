@@ -1,0 +1,138 @@
+#!/usr/bin/env node
+const fs = require('fs');
+const path = require('path');
+const fetch = require('node-fetch');
+const mime = require('mime-types');
+const ProgressBar = require('progress');
+const logger = require('../utils/logger');
+const guid = require('../utils/guid');
+const args = require('../utils/args');
+const file = require('../utils/file');
+
+const MAX_CHUNK_SIZE = 50;
+const DEFAULT_CHUNK_SIZE = 10;
+
+const download = async (url, downloadDirectory, progressBar) => {
+  const result = {url, downloaded: false, path: null};
+
+  try {
+    const response = await fetch(url);
+    const buffer = await response.buffer();
+    const mimeType = mime.lookup(response.headers.get('Content-Type')) || mime.lookup(url);
+    let fileExtension = mime.extension(mimeType);
+
+    if (!fileExtension) {
+      const parts = url.split('.');
+      if (parts.length > 1) {
+        fileExtension = parts[parts.length - 1];
+      }
+    }
+
+    const fileName = `${Date.now()}-${guid()}${fileExtension ? `.${fileExtension}` : ''}`;
+    const filePath = path.join(downloadDirectory, fileName);
+    fs.writeFileSync(filePath, buffer);
+    result.downloaded = response.ok;
+    result.path = filePath;
+  } catch {
+    // Ignore errors
+  }
+
+  progressBar.tick();
+
+  return result;
+};
+
+const batchDownload = ({urls = [], chunkSize = 10, downloadDirectory}) => {
+  return new Promise(async resolve => {
+    // Constrain chunk size minmax
+    chunkSize = Math.round(Math.max(Math.min(chunkSize, MAX_CHUNK_SIZE), 1));
+
+    const progressBar = new ProgressBar('Downloading [:bar] :rate/bps :percent :etas', {total: urls.length});
+
+    // Loop through chunked urls and collect responses
+    const responses = [];
+    for (let i = 0, length = urls.length; i < length; i += chunkSize) {
+      const chunk = urls.slice(i, i + chunkSize);
+      const queue = [];
+
+      // Add download promise to queue
+      for (let i = 0, length = chunk.length; i < length; i++) {
+        queue.push(download(chunk[i], downloadDirectory, progressBar));
+      }
+
+      // Wait for queue to finish, then add queue results to responses array
+      const queueResults = await Promise.all(queue);
+      for (let i = 0, length = queueResults.length; i < length; i++) {
+        responses.push(queueResults[i]);
+      }
+    }
+
+    resolve(responses);
+  });
+};
+
+/**
+ * Description
+ * Download URLs in parallel (batches of n) to a directory
+ *
+ * Usage
+ * node src/batchDownload urls.json ~/Downloads > results.json
+ *
+ * Arguments
+ * - URLs file (required): JSON file containing an array of URLs to download
+ * - Downloads directory (required): path to directory that files will be downloaded into
+ * - Results file (optional): JSON file where results will be saved to
+ * - chunkSize (optional): how many files to download in parallel
+ */
+(async function main() {
+  const namedArgs = args.get(process.argv, ['urlsFile', 'downloadDirectory', 'resultsFile', 'chunkSize']);
+  namedArgs.chunkSize = parseInt(String(namedArgs.chunkSize || DEFAULT_CHUNK_SIZE));
+
+  // Argument checks
+  args.required(namedArgs, 'urlsFile', 'Missing argument "urlsFile"');
+  args.required(namedArgs, 'downloadDirectory', 'Missing argument "downloadDirectory"');
+  args.constrainedNumber(namedArgs, 'chunkSize', 1, MAX_CHUNK_SIZE, `Chunk size must be a valid number from 1-${MAX_CHUNK_SIZE}`);
+
+  // Argument defaults
+  if (!namedArgs.resultsFile) {
+    namedArgs.resultsFile = 'results.json';
+  }
+
+  // Resolve file paths
+  namedArgs.urlsFile = file.resolvePath(namedArgs.urlsFile);
+  namedArgs.downloadDirectory = file.resolvePath(namedArgs.downloadDirectory);
+  namedArgs.resultsFile = file.resolvePath(namedArgs.resultsFile);
+
+  // Check files exists
+  file.exits(namedArgs.urlsFile, `URLs file not found at "${namedArgs.urlsFile}". Make sure this file exists first`);
+  file.exits(namedArgs.downloadDirectory, `Download directory not found "${namedArgs.downloadDirectory}". Make sure this directory exists first`);
+
+  // Read and parse urls urlsFile
+  let urls;
+  try {
+    urls = JSON.parse(fs.readFileSync(namedArgs.urlsFile, 'utf8'));
+  } catch {
+    logger.error('Failed to parse URLs file. Make sure this file contains a valid JSON array of URL strings');
+    process.exit(1);
+  }
+
+  if (urls.length === 0) {
+    logger.error(`0 URLs found in URLs file`);
+    process.exit(1);
+  }
+
+  const responses = await batchDownload({
+    urls,
+    chunkSize: namedArgs.chunkSize,
+    downloadDirectory: namedArgs.downloadDirectory
+  });
+
+  try {
+    fs.writeFileSync(namedArgs.resultsFile, JSON.stringify(responses, null, 2));
+  } catch {
+    logger.log(`Failed to write tmp file in "${namedArgs.resultsFile}"`);
+    process.exit(1);
+  }
+
+  logger.success(`Results saved to file ${namedArgs.resultsFile}`);
+})();
