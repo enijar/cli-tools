@@ -26,6 +26,15 @@ module.exports = {
       process.exit(1);
     }
   },
+  constrainedOption(args, argName, allowed = [], errorMessage) {
+    if (args[argName] === undefined) {
+      return;
+    }
+    if (allowed.indexOf(args[argName]) === -1) {
+      logger.error(errorMessage);
+      process.exit(1);
+    }
+  },
   required(args, argName, errorMessage) {
     if (args[argName] === undefined) {
       logger.error(errorMessage);

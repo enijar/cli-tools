@@ -1,0 +1,79 @@
+#!/usr/bin/env node
+const fs = require('fs');
+const path = require('path');
+const args = require('../utils/args');
+const file = require('../utils/file');
+
+const RENAME_METHODS = [
+  'sequence',
+];
+
+const listFiles = (directory, collectedFiles = [], ignoreHiddenFiles = true) => {
+  const files = fs.readdirSync(directory);
+  for (let i = 0, length = files.length; i < length; i++) {
+    const file = files[i];
+    if (ignoreHiddenFiles && file.startsWith('.')) {
+      continue;
+    }
+    const filePath = path.join(directory, file);
+    if (fs.statSync(filePath).isDirectory()) {
+      listFiles(filePath, collectedFiles);
+      continue;
+    }
+    collectedFiles.push(filePath);
+  }
+  return collectedFiles;
+};
+
+const batchRename = ({directory, renameMethod}) => {
+  return new Promise(async resolve => {
+    const files = listFiles(directory).sort();
+    const counters = {};
+
+    for (let i = 0, length = files.length; i < length; i++) {
+      const file = files[i];
+      const name = path.basename(file);
+      const extension = path.extname(name);
+      const directory = file.replace(name, '');
+
+      if (renameMethod === 'sequence') {
+        if (counters[directory] === undefined) {
+          counters[directory] = 1;
+        }
+        fs.renameSync(file, path.join(directory, `${counters[directory]}${extension ? extension : ''}`));
+        counters[directory]++;
+      }
+    }
+
+    resolve();
+  });
+};
+
+/**
+ * Description
+ * Recursively rename files in a directory
+ *
+ * Usage
+ * batch-rename ~/Downloads
+ *
+ * Arguments
+ * - Directory (required): Directory to rename files in
+ * - Rename method (required): method of renaming files. See below for options
+ *   - sequence (naturally sort files, then rename them from 1 to n)
+ */
+(async function main() {
+  const namedArgs = args.get(process.argv, ['directory', 'renameMethod']);
+
+  // Argument checks
+  args.required(namedArgs, 'directory', 'Missing argument "directory"');
+  args.required(namedArgs, 'renameMethod', 'Missing argument "renameMethod"');
+  args.constrainedOption(namedArgs, 'renameMethod', RENAME_METHODS, `Invalid rename method "${namedArgs.renameMethod}"`);
+
+  // Resolve file paths
+  namedArgs.directory = file.resolvePath(namedArgs.directory);
+
+  // Check files exists
+  file.exits(namedArgs.directory, `Directory not found "${namedArgs.directory}"`);
+
+  await batchRename({directory: namedArgs.directory, renameMethod: namedArgs.renameMethod});
+})();

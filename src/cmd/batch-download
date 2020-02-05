@@ -76,7 +76,7 @@ const batchDownload = ({urls = [], chunkSize = 10, downloadDirectory}) => {
  * Download URLs in parallel (batches of n) to a directory
  *
  * Usage
- * node src/batchDownload urls.json ~/Downloads > results.json
+ * batch-download urls.json ~/Downloads > results.json
  *
  * Arguments
  * - URLs file (required): JSON file containing an array of URLs to download

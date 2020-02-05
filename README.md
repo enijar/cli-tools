@@ -57,3 +57,19 @@ Download URLs in parallel (batches of n) to a directory.
 ```shell
 batch-download urls.json ~/Downloads results.json
 ```
+
+#### batch-rename
+
+Recursively rename files in a directory.
+
+**Arguments**
+
+- Directory (required): directory to rename files in
+- Rename method (required): method of renaming files. See below for options
+  - sequence (naturally sort files, then rename them from 1 to n)
+
+**Example**
+
+```shell
+batch-rename ~/Downloads sequence
+```
