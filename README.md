@@ -26,7 +26,7 @@ ln -sF /usr/local/bin/cli-tools/src/cmd/batch-download /usr/local/bin/batch-down
 Now you can use that command like this.
 
 ```shell
-batch-download urls.json ~/Downloads > results.json
+batch-download urls.json ~/Downloads results.json
 ```
 
 ### Updating
@@ -49,10 +49,11 @@ Download URLs in parallel (batches of n) to a directory.
 
 - URLs file (required): JSON file containing an array of URLs to download
 - Downloads directory (required): path to directory that files will be downloaded into
+- Results file (optional): JSON file where results will be saved to
 - chunkSize (optional): how many files to download in parallel
 
 **Example**
 
 ```shell
-batch-download urls.json ~/Downloads > results.json
+batch-download urls.json ~/Downloads results.json
 ```
